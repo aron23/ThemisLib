@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="ProjectModuleManager">
+    <modules>
+      <module fileurl="file://$PROJECT_DIR$/ThemisLib.iml" filepath="$PROJECT_DIR$/ThemisLib.iml" />
+      <module fileurl="file://$PROJECT_DIR$/app/app.iml" filepath="$PROJECT_DIR$/app/app.iml" />
+      <module fileurl="file://$PROJECT_DIR$/libsodium-jni-release/libsodium-jni-release.iml" filepath="$PROJECT_DIR$/libsodium-jni-release/libsodium-jni-release.iml" />
+      <module fileurl="file://$PROJECT_DIR$/themislib/themislib.iml" filepath="$PROJECT_DIR$/themislib/themislib.iml" />
+    </modules>
+  </component>
+</project>

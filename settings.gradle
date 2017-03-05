@@ -1,0 +1,1 @@
+include ':themislib', ':libsodium-jni-release', ':app'

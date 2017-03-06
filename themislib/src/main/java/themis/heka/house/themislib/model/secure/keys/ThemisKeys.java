@@ -14,7 +14,7 @@ public abstract class ThemisKeys {
 
     public ThemisKeys(byte[] publicKey, byte[] privateKey, KeyStore androidKeys, SharedPreferences pref) {
         mPref = pref;
-        storeKeys(Base64.encodeToString(publicKey, Themis.BASE64_SAFE_URL_FLAGS),Base64.encodeToString(privateKey, Themis.BASE64_SAFE_URL_FLAGS));
+        storeKeys(Base64.encodeToString(publicKey, Themis.BASE64_FLAGS),Base64.encodeToString(privateKey, Themis.BASE64_FLAGS));
         mAndroidKeys = androidKeys;
     }
 
@@ -26,10 +26,10 @@ public abstract class ThemisKeys {
 
 
     public byte[] retrievePrivKeyBytes() {
-        return Base64.decode(retrievePrivKey(),Themis.BASE64_SAFE_URL_FLAGS);
+        return Base64.decode(retrievePrivKey(),Themis.BASE64_FLAGS);
     }
 
     public byte[] retrievePubKeyBytes() {
-        return Base64.decode(retrievePubKey(),Themis.BASE64_SAFE_URL_FLAGS);
+        return Base64.decode(retrievePubKey(),Themis.BASE64_FLAGS);
     }
 }

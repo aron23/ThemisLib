@@ -30,6 +30,7 @@ import javax.crypto.spec.IvParameterSpec;
 
 import themis.heka.house.themislib.ThemisActivity;
 import themis.heka.house.themislib.model.secure.LocalEncryptedContent;
+import themis.heka.house.themislib.model.secure.RemoteEncryptedContent;
 import themis.heka.house.themislib.model.secure.keys.local.LocalEncryptedKey;
 import themis.heka.house.themislib.model.secure.keys.local.LocalEncryptionKey;
 import themis.heka.house.themislib.model.secure.keys.shared.EphemeralKeys;
@@ -37,7 +38,7 @@ import themis.heka.house.themislib.model.secure.keys.shared.SigningKeys;
 
 public class Themis {
 
-    public static final int BASE64_SAFE_URL_FLAGS = Base64.DEFAULT;
+    public static final int BASE64_FLAGS = Base64.DEFAULT;
     private static final String TAG = "Themis";
     private final SharedPreferences storage;
     public KeyStore mAndroidKeys = null;
@@ -46,7 +47,7 @@ public class Themis {
     private Context mActive;
 
     public static String bytes2String(byte[] bytes) {
-        return Base64.encodeToString(bytes, BASE64_SAFE_URL_FLAGS);
+        return Base64.encodeToString(bytes, BASE64_FLAGS);
     }
 
 
@@ -59,32 +60,24 @@ public class Themis {
      * Generates all sodium keys with a byte[] as seed
      */
     private void generate(byte[] seed) {
-        generateDeviceEncryptionKeyPair(seed);
-        generateSigningKeyPair(seed);
+        generateDeviceEncryption();
+        generateDeviceSigning(seed);
     }
 
-    /**
-     * Generates all sodium keys with a byte[] as seed
-     */
-    public void generate(KeyPair encryptionKeyPair, SigningKey signingKey) {
-        byte[] seed = new Random().randomBytes(SodiumConstants.SECRETKEY_BYTES);
-        generateDeviceEncryptionKeyPair(seed);
-
-        seed = new Random().randomBytes(SodiumConstants.SECRETKEY_BYTES);
-        generateSigningKeyPair(seed);
-    }
-
-    /**
-     * Generate Device Encryption Key Pair
-     *
-     * @param seed as the seed we generated on generate()
-     */
-    private void generateDeviceEncryptionKeyPair(byte[] seed) {
+    private void generateDeviceEncryption() {
         Sodium.sodium_init();
-        byte[] encryptionSecretKey = new byte[Sodium.crypto_secretbox_keybytes()];
-        Sodium.randombytes_buf(encryptionSecretKey, Sodium.crypto_secretbox_keybytes());
-        byte[][] encryptedSecret = androidEncrypt(encryptionSecretKey, mAndroidKeys);
-        deviceEncryption = new LocalEncryptionKey(encryptedSecret[0], encryptedSecret[1], mAndroidKeys, storage);
+        if (LocalEncryptionKey.isSecure(storage)) {
+            deviceEncryption = LocalEncryptionKey.restoreKeys(storage,mAndroidKeys);
+        } else {
+            byte[] encryptionSecretKey = new byte[Sodium.crypto_secretbox_keybytes()];
+            Sodium.randombytes_buf(encryptionSecretKey, Sodium.crypto_secretbox_keybytes());
+            //AES requires IV which is first element, content payload is second
+            byte[][] encryptedSecret = androidEncrypt(encryptionSecretKey, mAndroidKeys);
+            if (encryptedSecret != null && encryptedSecret.length > 1)
+                deviceEncryption = new LocalEncryptionKey(encryptedSecret[0], encryptedSecret[1], mAndroidKeys, storage);
+            else
+                Log.e(TAG,"encryption failed");
+        }
     }
 
     /**
@@ -92,12 +85,16 @@ public class Themis {
      *
      * @param seed as the seed we generated on generate()
      */
-    private void generateSigningKeyPair(byte[] seed) {
-        SigningKey signingKey = new SigningKey(seed);
-        VerifyKey verifyKey = signingKey.getVerifyKey();
-        byte[] verifyKeyArray = verifyKey.toBytes();
-        byte[] signingKeyArray = signingKey.toBytes();
-        signingKeys = new SigningKeys(getLocalEncryptedKey(signingKeyArray), getLocalEncryptedKey(verifyKeyArray), mAndroidKeys, storage, deviceEncryption);
+    private void generateDeviceSigning(byte[] seed) {
+        if (SigningKeys.isSecure(storage)) {
+            signingKeys = SigningKeys.restoreKeys(storage, mAndroidKeys, deviceEncryption, this);
+        } else {
+            SigningKey signingKey = new SigningKey(seed);
+            VerifyKey verifyKey = signingKey.getVerifyKey();
+            byte[] verifyKeyArray = verifyKey.toBytes();
+            byte[] signingKeyArray = signingKey.toBytes();
+            signingKeys = new SigningKeys(getLocalEncryptedKey(signingKeyArray), getLocalEncryptedKey(verifyKeyArray), mAndroidKeys, storage, deviceEncryption);
+        }
     }
 
     /*
@@ -139,7 +136,7 @@ public class Themis {
 
 //        while (Sodium.crypto_auth_verify(mac, contented, contented.length, deviceEncryption.retrievePubKeyBytes()) < 0) {
 //            Log.d(TAG,"mac problems trying again soon");
-//            Log.d(TAG,"mac1 "+Base64.encodeToString(mac,Themis.BASE64_SAFE_URL_FLAGS));
+//            Log.d(TAG,"mac1 "+Base64.encodeToString(mac,Themis.BASE64_FLAGS));
 //            try {
 //                Thread.sleep(5000);
 //            } catch (InterruptedException e) {
@@ -147,7 +144,7 @@ public class Themis {
 //            }
 //            mac = new byte[Sodium.crypto_secretbox_macbytes()];
 //            Sodium.crypto_secretbox_detached(ciphertext, mac, contented, contented.length, nonce, deviceEncryption.retrievePubKeyBytes());
-//            Log.d(TAG,"mac2 "+Base64.encodeToString(mac,Themis.BASE64_SAFE_URL_FLAGS));
+//            Log.d(TAG,"mac2 "+Base64.encodeToString(mac,Themis.BASE64_FLAGS));
 //        }
 
 
@@ -156,13 +153,13 @@ public class Themis {
 
 
         Log.d(TAG,"original "+content);
-        Log.d(TAG,"android iv "+Base64.encodeToString(encryptedSign[0], Themis.BASE64_SAFE_URL_FLAGS));
-        Log.d(TAG,"Sodium key "+Base64.encodeToString(deviceEncryption.retrievePubKeyBytes(), Themis.BASE64_SAFE_URL_FLAGS));
-        Log.d(TAG,"Sodium encryption "+Base64.encodeToString(ciphertext, Themis.BASE64_SAFE_URL_FLAGS));
-        Log.d(TAG,"nonce "+Base64.encodeToString(nonce, Themis.BASE64_SAFE_URL_FLAGS));
-        Log.d(TAG,"mac "+Base64.encodeToString(mac, Themis.BASE64_SAFE_URL_FLAGS));
-        Log.d(TAG,"altmac "+Base64.encodeToString(altmac, Themis.BASE64_SAFE_URL_FLAGS));
-        Log.d(TAG,"Android encryption "+Base64.encodeToString(encryptedSign[1], Themis.BASE64_SAFE_URL_FLAGS));
+        Log.d(TAG,"android iv "+Base64.encodeToString(encryptedSign[0], Themis.BASE64_FLAGS));
+        Log.d(TAG,"Sodium key "+Base64.encodeToString(deviceEncryption.retrievePubKeyBytes(), Themis.BASE64_FLAGS));
+        Log.d(TAG,"Sodium encryption "+Base64.encodeToString(ciphertext, Themis.BASE64_FLAGS));
+        Log.d(TAG,"nonce "+Base64.encodeToString(nonce, Themis.BASE64_FLAGS));
+        Log.d(TAG,"mac "+Base64.encodeToString(mac, Themis.BASE64_FLAGS));
+        Log.d(TAG,"altmac "+Base64.encodeToString(altmac, Themis.BASE64_FLAGS));
+        Log.d(TAG,"Android encryption "+Base64.encodeToString(encryptedSign[1], Themis.BASE64_FLAGS));
 
 
 
@@ -194,7 +191,7 @@ public class Themis {
         return ciphertext;
     }
 
-    public static byte[] decrypt(byte[] encrypted, byte[] nonce, byte[] mac, byte[] altmac, byte[] iv, byte[] key, int length, KeyStore androidKeys) {
+    public static byte[] decrypt(byte[] encrypted, byte[] nonce, byte[] mac, byte[] iv, byte[] key, int length, KeyStore androidKeys) {
         byte[] decrypted = new byte[length];
 
         //first unwrap keystore encryption
@@ -203,20 +200,16 @@ public class Themis {
         //next unwrap device encryption
         if (Sodium.crypto_secretbox_open_detached(decrypted, decryptedSign, mac, length, nonce, key) < 0) {
             Log.d(TAG,"secretbox open failed: mac");
-            if (Sodium.crypto_secretbox_open_detached(decrypted, decryptedSign, altmac, length, nonce, key) < 0) {
-                Log.d(TAG,"secretbox open failed: altmac");
-            }
         }
 
 
         String decryptedString = new String(decrypted);
-        Log.d(TAG,"Android encryption "+Base64.encodeToString(encrypted, Themis.BASE64_SAFE_URL_FLAGS));
-        Log.d(TAG,"mac "+Base64.encodeToString(mac, Themis.BASE64_SAFE_URL_FLAGS));
-        Log.d(TAG,"altmac "+Base64.encodeToString(altmac, Themis.BASE64_SAFE_URL_FLAGS));
-        Log.d(TAG,"nonce "+Base64.encodeToString(nonce, Themis.BASE64_SAFE_URL_FLAGS));
-        Log.d(TAG,"Sodium encryption "+Base64.encodeToString(decryptedSign, Themis.BASE64_SAFE_URL_FLAGS));
-        Log.d(TAG,"Sodium key "+Base64.encodeToString(key, Themis.BASE64_SAFE_URL_FLAGS));
-        Log.d(TAG,"android iv "+Base64.encodeToString(iv, Themis.BASE64_SAFE_URL_FLAGS));
+        Log.d(TAG,"Android encryption "+Base64.encodeToString(encrypted, Themis.BASE64_FLAGS));
+        Log.d(TAG,"mac "+Base64.encodeToString(mac, Themis.BASE64_FLAGS));
+        Log.d(TAG,"nonce "+Base64.encodeToString(nonce, Themis.BASE64_FLAGS));
+        Log.d(TAG,"Sodium encryption "+Base64.encodeToString(decryptedSign, Themis.BASE64_FLAGS));
+        Log.d(TAG,"Sodium key "+Base64.encodeToString(key, Themis.BASE64_FLAGS));
+        Log.d(TAG,"android iv "+Base64.encodeToString(iv, Themis.BASE64_FLAGS));
         Log.d(TAG,"original "+decryptedString);
 
 
@@ -280,7 +273,7 @@ public class Themis {
     }
 
     public String decryptLocal(LocalEncryptedContent toDec) {
-        byte[] decrypted = decrypt(toDec.content, toDec.nonce, toDec.mac, toDec.altmac, toDec.iv, deviceEncryption.retrievePrivKeyBytes(),toDec.length, mAndroidKeys);
+        byte[] decrypted = decrypt(toDec.content, toDec.nonce, toDec.mac, toDec.iv, deviceEncryption.retrievePrivKeyBytes(),toDec.length, mAndroidKeys);
         String result = null;
         try {
             result = new String(decrypted, "UTF-8");
@@ -289,5 +282,18 @@ public class Themis {
         }
         ;
         return result;
+    }
+
+    public LocalEncryptedKey decryptLocalEncryptionKey(byte[] encKey, byte[] nonce, int length, byte[] iv, byte[] mac) {
+        byte[] decrypted = decrypt(encKey, nonce, mac, iv, deviceEncryption.retrievePrivKeyBytes(),length, mAndroidKeys);
+        return new LocalEncryptedKey(nonce, iv, mac, decrypted, length);
+    }
+
+    public RemoteEncryptedContent encryptRemote(String toEnc) {
+        return null;
+    }
+
+    public String decryptRemote(RemoteEncryptedContent toDec) {
+        return null;
     }
 }

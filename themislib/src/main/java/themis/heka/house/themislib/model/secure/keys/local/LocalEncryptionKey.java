@@ -34,8 +34,20 @@ public class LocalEncryptionKey extends ThemisKeys {
     @Override
     protected String retrievePrivKey() {
         String encoded = mPref.getString(PRIVATE,"");
-        byte[] decrypted = Themis.androidDecrypt(Base64.decode(encoded.getBytes(), Themis.BASE64_SAFE_URL_FLAGS), iv, mAndroidKeys);
-        return Base64.encodeToString(decrypted, Themis.BASE64_SAFE_URL_FLAGS);
+        byte[] decrypted = Themis.androidDecrypt(Base64.decode(encoded.getBytes(), Themis.BASE64_FLAGS), iv, mAndroidKeys);
+        return Base64.encodeToString(decrypted, Themis.BASE64_FLAGS);
     }
 
+    public static boolean isSecure(SharedPreferences pref) {
+        String encoded = pref.getString(PRIVATE,"");
+        return encoded.length() > 0;
+    }
+
+    public static LocalEncryptionKey restoreKeys(SharedPreferences storage, KeyStore mAndroidKeys) {
+        byte[] iv = Base64.decode(storage.getString(PUBLIC,""),Themis.BASE64_FLAGS);
+        byte[] key = Base64.decode(storage.getString(PRIVATE,""),Themis.BASE64_FLAGS);
+        byte[] decrypted = Themis.androidDecrypt(Base64.decode(key, Themis.BASE64_FLAGS), iv, mAndroidKeys);
+        LocalEncryptionKey lec = new LocalEncryptionKey(iv, key, mAndroidKeys, storage);
+        return lec;
+    }
 }

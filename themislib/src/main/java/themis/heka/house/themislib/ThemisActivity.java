@@ -34,6 +34,7 @@ import javax.security.auth.x500.X500Principal;
 
 import themis.heka.house.themislib.api.Themis;
 import themis.heka.house.themislib.model.secure.LocalEncryptedContent;
+import themis.heka.house.themislib.model.secure.RemoteEncryptedContent;
 
 /**
  * Created by Aron on 3/5/2017.
@@ -42,17 +43,22 @@ import themis.heka.house.themislib.model.secure.LocalEncryptedContent;
 public class ThemisActivity extends AppCompatActivity {
 
     private static final String AndroidKeyStore = "AndroidKeyStore";
-    private static final String AES_MODE = "AES/GCM/NoPadding";
     public static String KEY_ALIAS = "themis";
     private KeyStore keyStore;
     private Themis themis;
     private String TAG = "ThemisActivity";
-    protected String random;
 
     @RequiresApi(api = Build.VERSION_CODES.M)
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        initializeKeyStore();
+    }
+
+    private void initializeKeyStore() {
+        //establish keystore and initate Themis
+        //every bit of data that is stored gets encrypted via Android keystore
+        //AES CBC PKCS7
         try {
             keyStore = KeyStore.getInstance(AndroidKeyStore);
             keyStore.load(null);
@@ -69,19 +75,14 @@ public class ThemisActivity extends AppCompatActivity {
                         .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_PKCS7);
                 keyGenerator.init(builder.build());
                 keyGenerator.generateKey();
-                keyStore.getKey(KEY_ALIAS,null);
+                keyStore.getKey(KEY_ALIAS, null);
             }
 
-            themis = new Themis(this,keyStore);
+            themis = new Themis(this, keyStore);
 
-
-
-        } catch (KeyStoreException | IOException | CertificateException | NoSuchAlgorithmException | NoSuchProviderException | UnrecoverableKeyException e) {
-            e.printStackTrace();
-        } catch (InvalidAlgorithmParameterException e) {
+        } catch (KeyStoreException | IOException | CertificateException | NoSuchAlgorithmException | NoSuchProviderException | UnrecoverableKeyException | InvalidAlgorithmParameterException e) {
             e.printStackTrace();
         }
-
     }
 
     public LocalEncryptedContent encryptForLocalUse(String toEnc) {
@@ -92,14 +93,11 @@ public class ThemisActivity extends AppCompatActivity {
         return themis.decryptLocal(toDec);
     }
 
-    protected byte[] getRandomBuffer() {
-        byte[] contented = "howdy".getBytes();
-        byte[] mac = new byte[Sodium.crypto_secretbox_macbytes()];
-        byte[] nonce = new byte[SodiumConstants.XSALSA20_POLY1305_SECRETBOX_NONCEBYTES];
-        Sodium.randombytes_buf(nonce, SodiumConstants.XSALSA20_POLY1305_SECRETBOX_NONCEBYTES);
-        //return nonce;
-        byte[] ciphertext = new byte[contented.length];
-        Sodium.crypto_secretbox_detached(ciphertext, mac, contented, contented.length, nonce, themis.deviceEncryption.retrievePrivKeyBytes());
-        byte[][] encrypted = Themis.androidEncrypt(ciphertext, themis.mAndroidKeys);
-        return new LocalEncryptedContent(nonce, encrypted[0], mac,mac, encrypted[1], contented.length).content;
-    }}
+    public RemoteEncryptedContent encryptForRemoteUse(String toEnc) {
+        return themis.encryptRemote(toEnc);
+    }
+
+    public String decryptRemote(RemoteEncryptedContent toDec) {
+        return themis.decryptRemote(toDec);
+    }
+}

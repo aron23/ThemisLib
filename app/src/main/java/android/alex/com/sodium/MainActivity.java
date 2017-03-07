@@ -1,25 +1,21 @@
 package android.alex.com.sodium;
 
 import android.os.Bundle;
-import android.support.v7.app.AppCompatActivity;
 import android.util.Base64;
+import android.util.Log;
 import android.view.View;
 import android.widget.Button;
 import android.widget.TextView;
+import android.widget.Toast;
 
-import org.libsodium.jni.Sodium;
-import org.libsodium.jni.SodiumConstants;
-import org.libsodium.jni.crypto.Random;
-import org.libsodium.jni.keys.KeyPair;
-import org.libsodium.jni.keys.SigningKey;
-import org.libsodium.jni.keys.VerifyKey;
-
-import themis.heka.house.themislib.ThemisActivity;
-import themis.heka.house.themislib.model.secure.LocalEncryptedContent;
+import house.heka.themislib.ThemisActivity;
+import house.heka.themislib.model.secure.LocalEncryptedContent;
+import house.heka.themislib.model.secure.RemoteEncryptedContent;
 
 public class MainActivity extends ThemisActivity {
 
     public static final int BASE64_SAFE_URL_FLAGS = Base64.URL_SAFE | Base64.NO_PADDING | Base64.NO_WRAP;
+    private static final String TAG = "MainActivity";
 
     private TextView seedView, publicKeyView, privateKeyView, signKeyView, verifyKeyView;
     private Button generateKeys;
@@ -39,6 +35,25 @@ public class MainActivity extends ThemisActivity {
     }
 
     public void generate() {
+        String message = "howdy";
+
+        try {
+            byte[] sig = sign(message);
+            Log.d(TAG,"signed: "+sig);
+
+            if (verifyMySignature(message,sig)) {
+                Toast.makeText(this, "signature verified", Toast.LENGTH_LONG).show();
+            } else {
+                Toast.makeText(this, "signature verification failed", Toast.LENGTH_LONG).show();
+            }
+
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+
+
+
+
         publicKeyView = (TextView) findViewById(R.id.textViewPublic);
         privateKeyView = (TextView) findViewById(R.id.textViewPrivate);
         signKeyView = (TextView) findViewById(R.id.textViewSign);
@@ -48,15 +63,22 @@ public class MainActivity extends ThemisActivity {
                 "\n" +
                 "Vestibulum orci arcu, facilisis quis eleifend ut, placerat ac ligula. Mauris justo enim, sodales a cursus vel, maximus ut neque. Morbi.";
 
-        LocalEncryptedContent lec = encryptForLocalUse(to_test);
-        publicKeyView.setText(Base64.encodeToString(lec.content,BASE64_SAFE_URL_FLAGS));
-        String decrypted = decryptForLocalUse(lec);
+        RemoteEncryptedContent rec = encryptForRemoteUse(to_test);
+        publicKeyView.setText(Base64.encodeToString(rec.content,BASE64_SAFE_URL_FLAGS));
+        String decrypted = decryptRemote(rec);
         privateKeyView.setText(decrypted);
 
 
 
+        LocalEncryptedContent lec = encryptForLocalUse(to_test);
+        signKeyView.setText(Base64.encodeToString(lec.content,BASE64_SAFE_URL_FLAGS));
+        decrypted = decryptForLocalUse(lec);
+        verifyKeyView.setText(decrypted);
+
 
     }
+
+
 
 
 }

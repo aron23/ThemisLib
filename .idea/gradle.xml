@@ -9,7 +9,8 @@
           <set>
             <option value="$PROJECT_DIR$" />
             <option value="$PROJECT_DIR$/app" />
-            <option value="$PROJECT_DIR$/libsodium-jni-release" />
+            <option value="$PROJECT_DIR$/librarytest" />
+            <option value="$PROJECT_DIR$/libsodium-jni" />
             <option value="$PROJECT_DIR$/themislib" />
           </set>
         </option>

@@ -1,1 +1,1 @@
-include ':themislib', ':libsodium-jni-release', ':app'
+include ':themislib', ':app', ':librarytest', ':libsodium-jni'

@@ -6,7 +6,7 @@ public class LocalEncryptedContent {
     public byte[] nonce;
     public byte[] content;
     public int length;
-    public LocalEncryptedContent(byte[] nonce, byte[] iv, byte[] mac, byte[] content, int length) {
+    public LocalEncryptedContent(byte[] nonce, byte[] iv, byte[] content, int length) {
         this.nonce = nonce;
         this.iv = iv;
         this.content = content;

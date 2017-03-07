@@ -8,6 +8,12 @@ import android.util.Log;
 
 import org.libsodium.jni.Sodium;
 import org.libsodium.jni.SodiumConstants;
+import org.libsodium.jni.crypto.Box;
+import org.libsodium.jni.crypto.Random;
+import org.libsodium.jni.crypto.SecretBox;
+import org.libsodium.jni.encoders.Hex;
+import org.libsodium.jni.keys.KeyPair;
+import org.libsodium.jni.keys.PrivateKey;
 
 import java.io.UnsupportedEncodingException;
 import java.security.InvalidAlgorithmParameterException;
@@ -43,21 +49,19 @@ public class Themis {
     public KeyStore mAndroidKeys = null;
     public LocalEncryptionKey deviceEncryption;
 
-    private static byte[] decrypt(byte[] encrypted, byte[] nonce, byte[] mac, byte[] iv, byte[] key, int length, KeyStore androidKeys) {
-        byte[] decrypted = new byte[length];
+    private static byte[] decrypt(byte[] encrypted, byte[] nonce, byte[] iv, byte[] key, int length, KeyStore androidKeys) {
 
         //first unwrap keystore encryption
         byte[] decryptedSign = androidDecrypt(encrypted, iv, androidKeys);
 
+        SecretBox crypto = new SecretBox(key);
+
         //next unwrap device encryption
-        if (Sodium.crypto_secretbox_open_detached(decrypted, decryptedSign, mac, length, nonce, key) < 0) {
-            Log.d(TAG,"secretbox open failed: mac");
-        }
+        byte[] decrypted = crypto.decrypt(nonce, encrypted);
 
 
         String decryptedString = new String(decrypted);
         Log.d(TAG,"Android encryption "+Base64.encodeToString(encrypted, Themis.BASE64_FLAGS));
-        Log.d(TAG,"mac "+Base64.encodeToString(mac, Themis.BASE64_FLAGS));
         Log.d(TAG,"nonce "+Base64.encodeToString(nonce, Themis.BASE64_FLAGS));
         Log.d(TAG,"Sodium encryption "+Base64.encodeToString(decryptedSign, Themis.BASE64_FLAGS));
         Log.d(TAG,"Sodium key "+Base64.encodeToString(key, Themis.BASE64_FLAGS));
@@ -69,7 +73,6 @@ public class Themis {
     }
 
     private static byte[] decryptRemoteContent(RemoteEncryptedContent rec, SharedPreferences storage, KeyStore androidKeys) {
-        byte[] decrypted = new byte[rec.length];
 
         String encLocalPrivKey = storage.getString(rec.tag,"");
         String iv = storage.getString(rec.tag+"-iv","");
@@ -80,21 +83,14 @@ public class Themis {
                 Base64.decode(iv,Themis.BASE64_FLAGS),
                 androidKeys);
 
+
         //next unwrap device encryption
-        if (Sodium.crypto_box_open_detached(
-                decrypted,
-                rec.content,
-                rec.mac,
-                rec.length,
-                rec.nonce,
-                rec.remote,
-                localPrivKey) < 0) {
-            Log.d(TAG,"secretbox open failed: mac");
-        }
+        Box crypto = new Box(rec.remote,localPrivKey);
+        byte[] decrypted = crypto.decrypt(rec.nonce, rec.content);
+
 
 
         String decryptedString = new String(decrypted);
-        Log.d(TAG,"mac "+Base64.encodeToString(rec.mac, Themis.BASE64_FLAGS));
         Log.d(TAG,"nonce "+Base64.encodeToString(rec.nonce, Themis.BASE64_FLAGS));
         Log.d(TAG,"Sodium encryption "+Base64.encodeToString(rec.content, Themis.BASE64_FLAGS));
         Log.d(TAG,"Remote key "+Base64.encodeToString(rec.remote, Themis.BASE64_FLAGS));
@@ -186,12 +182,12 @@ public class Themis {
     }
 
     private void generateDeviceEncryption() {
-        Sodium.sodium_init();
+
         if (LocalEncryptionKey.isSecure(storage)) {
             deviceEncryption = LocalEncryptionKey.restoreKeys(storage,mAndroidKeys);
         } else {
-            byte[] encryptionSecretKey = new byte[Sodium.crypto_secretbox_keybytes()];
-            Sodium.randombytes_buf(encryptionSecretKey, Sodium.crypto_secretbox_keybytes());
+            byte[] encryptionSecretKey = new Random().randomBytes(SodiumConstants.SECRETKEY_BYTES);
+
             //AES requires IV which is first element, content payload is second
             byte[][] encryptedSecret = androidEncrypt(encryptionSecretKey, mAndroidKeys);
             if (encryptedSecret != null && encryptedSecret.length > 1)
@@ -203,37 +199,26 @@ public class Themis {
 
     @NonNull
     private RemoteEncryptedContent getRemoteEncryptedContent(String content) {
-        byte[] contented = new byte[0];
-        byte[] mac = new byte[Sodium.crypto_box_macbytes()];
 
-        contented = content.getBytes();
+        byte[] contented = content.getBytes();
 
 
-        byte[] nonce = new byte[Sodium.crypto_box_noncebytes()];
-
-        Sodium.randombytes_buf(nonce, nonce.length);
-
-        byte[] ciphertext = new byte[contented.length];
+        byte[] nonce = new Random().randomBytes(SodiumConstants.NONCE_BYTES);
 
         //first encrypt using device encryption pub key
-        byte[] remotePubKey = new byte[SodiumConstants.PUBLICKEY_BYTES];
-        byte[] remotePrivKey = new byte[SodiumConstants.SECRETKEY_BYTES];
-        Sodium.crypto_box_keypair(remotePubKey,remotePrivKey);
+        byte[] seed = new Random().randomBytes(SodiumConstants.SECRETKEY_BYTES);
+        KeyPair remote = new KeyPair(seed);
+        byte[] remotePubKey = remote.getPublicKey().toBytes();
+        byte[] remotePrivKey = remote.getPrivateKey().toBytes();
 
-        byte[] localPubKey = new byte[SodiumConstants.PUBLICKEY_BYTES];
-        byte[] localPrivKey = new byte[SodiumConstants.SECRETKEY_BYTES];
-        Sodium.crypto_box_keypair(localPubKey,localPrivKey);
-
-        Sodium.crypto_box_detached(
-                ciphertext,
-                mac,
-                contented,
-                contented.length,
-                nonce,
-                remotePubKey,
-                localPrivKey);
+        KeyPair local = new KeyPair(seed);
+        byte[] localPubKey = local.getPublicKey().toBytes();
+        byte[] localPrivKey = local.getPrivateKey().toBytes();
 
 
+        Box crypto = new Box(remotePubKey, localPrivKey);
+
+        byte[] ciphertext = crypto.encrypt(nonce,contented);
 
         String tag = Base64.encodeToString(localPubKey, Themis.BASE64_FLAGS);
 
@@ -250,37 +235,29 @@ public class Themis {
         Log.d(TAG,"Local key "+Base64.encodeToString(localPrivKey, Themis.BASE64_FLAGS));
         Log.d(TAG,"Sodium encryption "+Base64.encodeToString(ciphertext, Themis.BASE64_FLAGS));
         Log.d(TAG,"nonce "+Base64.encodeToString(nonce, Themis.BASE64_FLAGS));
-        Log.d(TAG,"mac "+Base64.encodeToString(mac, Themis.BASE64_FLAGS));
 
-        return new RemoteEncryptedContent(nonce, mac, ciphertext, contented.length, remotePubKey, tag);
+        return new RemoteEncryptedContent(nonce, ciphertext, contented.length, remotePubKey, tag);
     }
 
     @NonNull
     private LocalEncryptedContent getLocalEncryptedContent(String content) {
-        byte[] contented = new byte[0];
+
         byte[] mac = new byte[Sodium.crypto_secretbox_macbytes()];
 
-        contented = content.getBytes();
+        byte[] contented = content.getBytes();
 
-        byte[] nonce = new byte[Sodium.crypto_secretbox_noncebytes()];
+        byte[] nonce = new Random().randomBytes(SodiumConstants.NONCE_BYTES);
 
-        Sodium.randombytes_buf(nonce, nonce.length);
-
-        byte[] ciphertext = new byte[contented.length];
 
         //first encrypt using device encryption pub key
-        Sodium.crypto_secretbox_detached(
-                ciphertext,
-                mac,
-                contented,
-                contented.length,
-                nonce,
-                deviceEncryption.retrievePrivKeyBytes());
+        SecretBox crypto = new SecretBox(deviceEncryption.retrievePrivKeyBytes());
+
+        byte[] ciphertext = crypto.encrypt(nonce, contented);
 
         //next encrypt using keystore
         byte[][] encryptedSign = androidEncrypt(ciphertext, mAndroidKeys);
 
-        return new LocalEncryptedContent(nonce, encryptedSign[0], mac, encryptedSign[1], contented.length);
+        return new LocalEncryptedContent(nonce, encryptedSign[0], encryptedSign[1], contented.length);
     }
 
     public void removeRECTag(String tag) {
@@ -293,7 +270,7 @@ public class Themis {
     }
 
     public String decryptLocal(LocalEncryptedContent toDec) {
-        byte[] decrypted = decrypt(toDec.content, toDec.nonce, toDec.mac, toDec.iv, deviceEncryption.retrievePrivKeyBytes(),toDec.length, mAndroidKeys);
+        byte[] decrypted = decrypt(toDec.content, toDec.nonce, toDec.iv, deviceEncryption.retrievePrivKeyBytes(),toDec.length, mAndroidKeys);
         String result = null;
         try {
             result = new String(decrypted, "UTF-8");

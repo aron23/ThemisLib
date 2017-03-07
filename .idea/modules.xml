@@ -3,14 +3,9 @@
   <component name="ProjectModuleManager">
     <modules>
       <module fileurl="file://$PROJECT_DIR$/ThemisLib.iml" filepath="$PROJECT_DIR$/ThemisLib.iml" />
-      <module fileurl="file://$PROJECT_DIR$/ThemisLib.iml" filepath="$PROJECT_DIR$/ThemisLib.iml" />
-      <module fileurl="file://$PROJECT_DIR$/app/app.iml" filepath="$PROJECT_DIR$/app/app.iml" />
       <module fileurl="file://$PROJECT_DIR$/app/app.iml" filepath="$PROJECT_DIR$/app/app.iml" />
       <module fileurl="file://$PROJECT_DIR$/librarytest/librarytest.iml" filepath="$PROJECT_DIR$/librarytest/librarytest.iml" />
-      <module fileurl="file://$PROJECT_DIR$/librarytest/librarytest.iml" filepath="$PROJECT_DIR$/librarytest/librarytest.iml" />
       <module fileurl="file://$PROJECT_DIR$/libsodium-jni/libsodium-jni.iml" filepath="$PROJECT_DIR$/libsodium-jni/libsodium-jni.iml" />
-      <module fileurl="file://$PROJECT_DIR$/libsodium-jni/libsodium-jni.iml" filepath="$PROJECT_DIR$/libsodium-jni/libsodium-jni.iml" />
-      <module fileurl="file://$PROJECT_DIR$/themislib/themislib.iml" filepath="$PROJECT_DIR$/themislib/themislib.iml" />
       <module fileurl="file://$PROJECT_DIR$/themislib/themislib.iml" filepath="$PROJECT_DIR$/themislib/themislib.iml" />
     </modules>
   </component>

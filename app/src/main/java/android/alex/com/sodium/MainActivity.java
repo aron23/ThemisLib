@@ -70,10 +70,10 @@ public class MainActivity extends ThemisActivity {
 
 
 
-//        LocalEncryptedContent lec = encryptForLocalUse(to_test);
-//        signKeyView.setText(Base64.encodeToString(lec.content,BASE64_SAFE_URL_FLAGS));
-//        decrypted = decryptForLocalUse(lec);
-//        verifyKeyView.setText(decrypted);
+        LocalEncryptedContent lec = encryptForLocalUse(to_test);
+        signKeyView.setText(Base64.encodeToString(lec.content,BASE64_SAFE_URL_FLAGS));
+        decrypted = decryptForLocalUse(lec);
+        verifyKeyView.setText(decrypted);
 
 
     }

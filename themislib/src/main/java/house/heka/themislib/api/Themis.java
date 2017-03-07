@@ -49,22 +49,22 @@ public class Themis {
     public KeyStore mAndroidKeys = null;
     public LocalEncryptionKey deviceEncryption;
 
-    private static byte[] decrypt(byte[] encrypted, byte[] nonce, byte[] iv, byte[] key, int length, KeyStore androidKeys) {
+    private static byte[] decrypt(byte[] encrypted, byte[] nonce, byte[] iv, LocalEncryptionKey deviceEncryption, KeyStore androidKeys) {
 
         //first unwrap keystore encryption
-        byte[] decryptedSign = androidDecrypt(encrypted, iv, androidKeys);
+        byte[] unwrapped = androidDecrypt(encrypted, iv, androidKeys);
 
-        SecretBox crypto = new SecretBox(key);
+        SecretBox crypto = new SecretBox(deviceEncryption.retrievePrivKeyBytes());
 
         //next unwrap device encryption
-        byte[] decrypted = crypto.decrypt(nonce, encrypted);
+        byte[] decrypted = crypto.decrypt(nonce, unwrapped);
 
 
         String decryptedString = new String(decrypted);
         Log.d(TAG,"Android encryption "+Base64.encodeToString(encrypted, Themis.BASE64_FLAGS));
         Log.d(TAG,"nonce "+Base64.encodeToString(nonce, Themis.BASE64_FLAGS));
-        Log.d(TAG,"Sodium encryption "+Base64.encodeToString(decryptedSign, Themis.BASE64_FLAGS));
-        Log.d(TAG,"Sodium key "+Base64.encodeToString(key, Themis.BASE64_FLAGS));
+        Log.d(TAG,"Sodium encryption "+Base64.encodeToString(unwrapped, Themis.BASE64_FLAGS));
+        Log.d(TAG,"Sodium key "+Base64.encodeToString(deviceEncryption.retrievePrivKeyBytes(), Themis.BASE64_FLAGS));
         Log.d(TAG,"android iv "+Base64.encodeToString(iv, Themis.BASE64_FLAGS));
         Log.d(TAG,"original "+decryptedString);
 
@@ -242,12 +242,9 @@ public class Themis {
     @NonNull
     private LocalEncryptedContent getLocalEncryptedContent(String content) {
 
-        byte[] mac = new byte[Sodium.crypto_secretbox_macbytes()];
-
         byte[] contented = content.getBytes();
 
         byte[] nonce = new Random().randomBytes(SodiumConstants.NONCE_BYTES);
-
 
         //first encrypt using device encryption pub key
         SecretBox crypto = new SecretBox(deviceEncryption.retrievePrivKeyBytes());
@@ -270,7 +267,12 @@ public class Themis {
     }
 
     public String decryptLocal(LocalEncryptedContent toDec) {
-        byte[] decrypted = decrypt(toDec.content, toDec.nonce, toDec.iv, deviceEncryption.retrievePrivKeyBytes(),toDec.length, mAndroidKeys);
+        byte[] decrypted = decrypt(
+                toDec.content,
+                toDec.nonce,
+                toDec.iv,
+                deviceEncryption,
+                mAndroidKeys);
         String result = null;
         try {
             result = new String(decrypted, "UTF-8");
